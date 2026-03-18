@@ -1,0 +1,4 @@
+flask
+flask-cors
+paho-mqtt
+python-dotenv

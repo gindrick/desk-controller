@@ -1,0 +1,134 @@
+esphome:
+  name: rodulf-desk
+  friendly_name: RODULF Desk
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "DeskControl Fallback"
+    password: "deskcontrol"
+
+captive_portal:
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  topic_prefix: desk
+  on_message:
+    - topic: desk/command
+      then:
+        - lambda: |-
+            std::string cmd = x;
+            if (cmd == "up") {
+              id(relay_up).turn_on();
+              id(relay_down).turn_off();
+            } else if (cmd == "down") {
+              id(relay_down).turn_on();
+              id(relay_up).turn_off();
+            } else if (cmd == "stop") {
+              id(relay_up).turn_off();
+              id(relay_down).turn_off();
+              id(seeking) = false;
+            }
+    - topic: desk/target
+      then:
+        - lambda: |-
+            id(target_height) = atof(x.c_str());
+            id(seeking) = true;
+
+globals:
+  - id: target_height
+    type: float
+    initial_value: '0.0'
+  - id: seeking
+    type: bool
+    initial_value: 'false'
+  - id: sensor_offset
+    type: float
+    initial_value: '8.0'
+  - id: max_height
+    type: float
+    initial_value: '117.0'
+
+sensor:
+  - platform: ultrasonic
+    trigger_pin: GPIO18
+    echo_pin: GPIO19
+    name: "Desk Height Raw"
+    id: desk_height
+    update_interval: 300ms
+    filters:
+      - lambda: if (x < 0.60f) return {}; return x;
+      - median:
+          window_size: 5
+          send_every: 1
+      - lambda: return (x * 100.0f + id(sensor_offset));
+      - clamp:
+          min_value: 68
+          max_value: 118
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: desk/height
+            payload: !lambda 'return to_string((int)(x * 10) / 10.0);'
+        - lambda: |-
+            float current = x;
+            // Hard limit: never go above max_height
+            if (current >= id(max_height) && id(relay_up).state) {
+              id(relay_up).turn_off();
+              id(seeking) = false;
+              return;
+            }
+            if (!id(seeking)) return;
+            float target = id(target_height);
+            // Clamp target to max
+            if (target > id(max_height)) target = id(max_height);
+            float diff = target - current;
+            if (fabs(diff) < 1.5) {
+              id(relay_up).turn_off();
+              id(relay_down).turn_off();
+              id(seeking) = false;
+            } else if (diff > 0) {
+              id(relay_up).turn_on();
+              id(relay_down).turn_off();
+            } else {
+              id(relay_down).turn_on();
+              id(relay_up).turn_off();
+            }
+
+switch:
+  - platform: gpio
+    pin: GPIO25
+    id: relay_up
+    name: "Desk Up"
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - mqtt.publish:
+          topic: desk/move
+          payload: "moving_up"
+    on_turn_off:
+      - mqtt.publish:
+          topic: desk/move
+          payload: "idle"
+
+  - platform: gpio
+    pin: GPIO26
+    id: relay_down
+    name: "Desk Down"
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - mqtt.publish:
+          topic: desk/move
+          payload: "moving_down"
+    on_turn_off:
+      - mqtt.publish:
+          topic: desk/move
+          payload: "idle"

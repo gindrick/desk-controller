@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskControl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --border: #2a2a2e;
+    --accent: #e8ff47;
+    --accent2: #47c8ff;
+    --danger: #ff4757;
+    --text: #f0f0f0;
+    --muted: #666;
+    --height-min: 65;
+    --height-max: 120;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+    gap: 24px;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* ── Height Display ── */
+  .height-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .live-row {
+    margin-top: 8px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.04em;
+  }
+  .live-row .live-val { font-family: 'Space Mono', monospace; }
+  .live-row.warn { color: var(--danger); }
+
+  .height-card.obstructed {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 1px var(--danger);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .height-card.obstructed::before {
+    background: var(--danger);
+    transform: scaleX(1);
+  }
+
+  .height-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 0.4s ease;
+  }
+  .height-card.moving::before { transform: scaleX(1); }
+
+  .height-number {
+    font-family: 'Syne', sans-serif;
+    font-size: 5rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+    letter-spacing: -0.04em;
+    transition: color 0.3s;
+  }
+
+  .height-number.unknown { color: var(--muted); }
+
+  .height-unit {
+    font-size: 1.2rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* ── Vertical bar ── */
+  .height-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .height-label-top { font-size: 0.65rem; color: var(--muted); }
+  .height-label-bot { font-size: 0.65rem; color: var(--muted); }
+
+  .height-bar {
+    width: 6px;
+    height: 120px;
+    background: var(--border);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .height-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Status badge ── */
+  .status-badge {
+    position: absolute;
+    bottom: 16px; right: 20px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    width: 100%;
+    max-width: 480px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    padding: 16px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  .btn-up, .btn-down {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .btn-up:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-down:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-up.pressing { background: #1e2200; border-color: var(--accent); color: var(--accent); }
+  .btn-down.pressing { background: #001e28; border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-stop {
+    grid-column: span 2;
+    border-color: var(--danger);
+    color: var(--danger);
+    background: #1a0810;
+    letter-spacing: 0.15em;
+  }
+
+  .btn-stop:hover { background: #2a0f18; }
+
+  /* ── Presets ── */
+  .section-label {
+    width: 100%;
+    max-width: 480px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: -12px;
+  }
+
+  .presets {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .preset-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+  }
+
+  .preset-name {
+    font-size: 0.8rem;
+    min-width: 80px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .preset-height {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .preset-unit {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-right: 8px;
+  }
+
+  .btn-preset-go {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 6px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+  .btn-preset-go:hover { background: #1e2200; border-color: var(--accent); }
+
+  .btn-preset-edit {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .btn-preset-edit:hover { color: var(--text); }
+
+  .btn-preset-delete {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.7rem;
+    padding: 4px 6px;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .btn-preset-delete:hover { color: var(--danger); }
+
+  /* ── Add preset / save current ── */
+  .add-preset-row {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    padding: 10px 12px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input:focus { border-color: var(--accent); }
+  .input::placeholder { color: var(--muted); }
+
+  .btn-save-current {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 10px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .btn-save-current:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── Inline edit ── */
+  .height-input {
+    width: 60px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--accent);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    text-align: center;
+    outline: none;
+    padding: 2px 4px;
+  }
+
+  /* ── Calibration ── */
+  .cal-box {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cal-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .cal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  .cal-table th {
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cal-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+  }
+  .cal-table td.pos { color: var(--accent); }
+  .cal-table td.neg { color: var(--danger); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.75rem;
+    padding: 10px 20px;
+    border-radius: 4px;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.ok { border-color: var(--accent); }
+
+  /* ── Edit modal ── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .modal h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .modal label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .btn-modal-ok {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 8px 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .btn-modal-cancel {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 8px 18px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <h1>DESKCONTROL</h1>
+  <div class="status-dot">
+    <div class="dot" id="mqttDot"></div>
+    <span id="mqttLabel">---</span>
+  </div>
+</header>
+
+<!-- Height Display -->
+<div class="height-card" id="heightCard">
+  <div>
+    <div class="height-number unknown" id="heightDisplay">--</div>
+    <div class="height-unit">cm</div>
+    <div class="live-row" id="liveRow">
+      SENSOR <span class="live-val" id="liveDisplay">--</span> cm
+      <span id="sensorWarn"></span>
+    </div>
+  </div>
+  <div class="height-bar-wrap">
+    <span class="height-label-top">120</span>
+    <div class="height-bar">
+      <div class="height-fill" id="heightFill" style="height:0%"></div>
+    </div>
+    <span class="height-label-bot">65</span>
+  </div>
+  <div class="status-badge" id="statusBadge">IDLE</div>
+</div>
+
+<!-- Manual Controls -->
+<div class="controls">
+  <button class="btn btn-up" id="btnUp"
+    onmousedown="startCmd('up')" onmouseup="stopCmd()"
+    ontouchstart="startCmd('up')" ontouchend="stopCmd()">
+    ▲ UP
+  </button>
+  <button class="btn btn-down" id="btnDown"
+    onmousedown="startCmd('down')" onmouseup="stopCmd()"
+    ontouchstart="startCmd('down')" ontouchend="stopCmd()">
+    ▼ DOWN
+  </button>
+  <button class="btn btn-stop" onclick="sendCommand('stop')">
+    ■ STOP
+  </button>
+</div>
+
+<!-- Presets label -->
+<div class="section-label">Presets</div>
+
+<!-- Presets list -->
+<div class="presets" id="presetsList"></div>
+
+<!-- Add / Save current -->
+<div class="add-preset-row">
+  <input class="input" id="newPresetName" placeholder="preset name…" maxlength="20">
+  <button class="btn-save-current" onclick="saveCurrentAsPreset()">
+    Save current height
+  </button>
+</div>
+
+<!-- Calibration -->
+<div class="section-label">Calibration</div>
+<div class="cal-box">
+  <div class="cal-input-row">
+    <input class="input" type="number" id="calActual" placeholder="actual height (cm)" step="0.5" style="width:180px">
+    <button class="btn-save-current" onclick="logCalPoint()">Log</button>
+    <button class="btn-save-current" onclick="clearCalLog()" style="color:var(--danger);border-color:var(--danger)">Clear</button>
+  </div>
+  <table class="cal-table" id="calTable">
+    <thead><tr><th>Actual</th><th>Sensor</th><th>Diff</th><th>Direction</th></tr></thead>
+    <tbody id="calBody"></tbody>
+  </table>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Edit modal -->
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <h2>Edit preset</h2>
+    <label>
+      NAME
+      <input class="input" id="editName">
+    </label>
+    <label>
+      HEIGHT (cm)
+      <input class="input" id="editHeight" type="number" min="65" max="120" step="0.5">
+    </label>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-modal-ok" onclick="saveModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let state = { height: null, status: 'idle', mqtt_connected: false, presets: {} };
+let pressInterval = null;
+let editingKey = null;
+let calLog = [];
+let lastDirection = 'idle';
+let prevStatus = 'idle';
+let settledHeight = null;
+let settleTimer = null;
+let divergedSince = null;
+
+// ── Polling ────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const r = await fetch(`${API}/api/state`);
+    const d = await r.json();
+    updateUI(d);
+  } catch(e) {}
+}
+
+function updateUI(d) {
+  state = d;
+  const card = document.getElementById('heightCard');
+
+  // MQTT status
+  const dot = document.getElementById('mqttDot');
+  const lbl = document.getElementById('mqttLabel');
+  if (d.mqtt_connected) {
+    dot.className = 'dot connected';
+    lbl.textContent = 'MQTT OK';
+  } else {
+    dot.className = 'dot error';
+    lbl.textContent = 'OFFLINE';
+  }
+
+  // Height
+  const hEl = document.getElementById('heightDisplay');
+  const fill = document.getElementById('heightFill');
+  const isMoving = d.status !== 'idle';
+  if (d.height !== null) {
+    if (isMoving) {
+      // Live display during movement; cancel any pending settle
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      const h = Math.round(d.height * 2) / 2;
+      hEl.textContent = h.toFixed(1);
+      hEl.classList.remove('unknown');
+      const pct = ((d.height - 65) / (120 - 65)) * 100;
+      fill.style.height = Math.max(0, Math.min(100, pct)) + '%';
+    } else {
+      // Idle: schedule settle capture when just stopped or on first load
+      if ((prevStatus !== 'idle' || settledHeight === null) && settleTimer === null) {
+        const delay = settledHeight === null ? 1000 : 700;
+        settleTimer = setTimeout(() => {
+          if (state.height !== null) {
+            settledHeight = state.height;
+            const h = Math.round(settledHeight * 2) / 2;
+            document.getElementById('heightDisplay').textContent = h.toFixed(1);
+            const pct = ((settledHeight - 65) / (120 - 65)) * 100;
+            document.getElementById('heightFill').style.height = Math.max(0, Math.min(100, pct)) + '%';
+          }
+          settleTimer = null;
+        }, delay);
+      }
+      // Show settled value; fall back to live only before first settle
+      const displayH = settledHeight !== null ? settledHeight : d.height;
+      const h = Math.round(displayH * 2) / 2;
+      hEl.textContent = h.toFixed(1);
+      hEl.classList.remove('unknown');
+      const pct = ((displayH - 65) / (120 - 65)) * 100;
+      fill.style.height = Math.max(0, Math.min(100, pct)) + '%';
+    }
+  } else {
+    hEl.textContent = '--';
+    hEl.classList.add('unknown');
+    fill.style.height = '0%';
+  }
+
+  // Live sensor reading + obstruction warning (sustained >10s divergence)
+  const liveRow = document.getElementById('liveRow');
+  const liveEl = document.getElementById('liveDisplay');
+  const warnEl = document.getElementById('sensorWarn');
+  if (d.height !== null) {
+    liveEl.textContent = d.height.toFixed(1);
+    // Stale: no sensor update for >2s (sensor blocked, pre-filter dropping all readings)
+    const stale = d.last_update !== null && (Date.now() / 1000 - d.last_update) > 2;
+    // Diverged: sensor reads >5cm off from frozen for sustained period
+    const diverging = !isMoving && settledHeight !== null && Math.abs(d.height - settledHeight) > 5;
+    if (diverging || stale) {
+      if (divergedSince === null) divergedSince = Date.now();
+    } else {
+      divergedSince = null;
+    }
+    const obstructed = divergedSince !== null && (Date.now() - divergedSince) >= 10000;
+    liveRow.className = 'live-row' + (obstructed ? ' warn' : '');
+    warnEl.textContent = obstructed ? '⚠ obstructed' : '';
+    card.classList.toggle('obstructed', obstructed);
+  } else {
+    liveEl.textContent = '--';
+    liveRow.className = 'live-row';
+    warnEl.textContent = '';
+    card.classList.remove('obstructed');
+  }
+
+  // Status
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = d.status.toUpperCase().replace('_', ' ');
+  card.classList.toggle('moving', d.status !== 'idle');
+  checkAutoLog(d.status);
+
+  // Presets
+  renderPresets(d.presets);
+}
+
+// ── Presets render ─────────────────────────────────────────────
+let lastPresetsJson = '';
+function renderPresets(presets) {
+  const json = JSON.stringify(presets);
+  if (json === lastPresetsJson) return;
+  lastPresetsJson = json;
+  const list = document.getElementById('presetsList');
+  list.innerHTML = '';
+  for (const [k, v] of Object.entries(presets)) {
+    const row = document.createElement('div');
+    row.className = 'preset-row';
+    const isCore = k === 'sit' || k === 'stand';
+    row.innerHTML = `
+      <span class="preset-name">${k}</span>
+      <span class="preset-height">${v}</span>
+      <span class="preset-unit">cm</span>
+      <button class="btn-preset-go" onclick="gotoPreset('${k}')">→ GO</button>
+      <button class="btn-preset-edit" onclick="openEditModal('${k}', ${v})">✎</button>
+      ${!isCore ? `<button class="btn-preset-delete" onclick="deletePreset('${k}')">✕</button>` : ''}
+    `;
+    list.appendChild(row);
+  }
+}
+
+// ── Commands ───────────────────────────────────────────────────
+async function sendCommand(cmd) {
+  try {
+    const r = await fetch(`${API}/api/command`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ command: cmd })
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      toast(e.error || 'Error', true);
+    }
+  } catch(e) {
+    toast('Cannot reach server', true);
+  }
+}
+
+function startCmd(dir) {
+  document.getElementById(dir === 'up' ? 'btnUp' : 'btnDown').classList.add('pressing');
+  sendCommand(dir);
+  pressInterval = setInterval(() => sendCommand(dir), 300);
+}
+
+function stopCmd() {
+  clearInterval(pressInterval);
+  pressInterval = null;
+  document.getElementById('btnUp').classList.remove('pressing');
+  document.getElementById('btnDown').classList.remove('pressing');
+  sendCommand('stop');
+}
+
+async function gotoPreset(name) {
+  const height = state.presets[name];
+  if (height == null) return;
+  try {
+    const r = await fetch(`${API}/api/goto`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ height })
+    });
+    const d = await r.json();
+    if (d.ok) toast(`→ ${name.toUpperCase()} (${height} cm)`);
+    else toast(d.error, true);
+  } catch(e) {
+    toast('Error', true);
+  }
+}
+
+// ── Save current height as preset ─────────────────────────────
+async function saveCurrentAsPreset() {
+  const name = document.getElementById('newPresetName').value.trim();
+  if (!name) { toast('Enter preset name', true); return; }
+  if (state.height === null) { toast('Desk height unknown', true); return; }
+
+  try {
+    const r = await fetch(`${API}/api/presets/save_current`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✓ Saved: ${name} = ${d.height} cm`);
+      document.getElementById('newPresetName').value = '';
+      poll();
+    } else {
+      toast(d.error, true);
+    }
+  } catch(e) {
+    toast('Error', true);
+  }
+}
+
+// ── Delete preset ──────────────────────────────────────────────
+async function deletePreset(name) {
+  if (!confirm(`Delete preset "${name}"?`)) return;
+  try {
+    await fetch(`${API}/api/presets/${name}`, { method: 'DELETE' });
+    poll();
+  } catch(e) {
+    toast('Error', true);
+  }
+}
+
+// ── Edit modal ─────────────────────────────────────────────────
+function openEditModal(key, height) {
+  editingKey = key;
+  document.getElementById('editName').value = key;
+  document.getElementById('editHeight').value = height;
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  editingKey = null;
+}
+
+async function saveModal() {
+  const newName = document.getElementById('editName').value.trim();
+  const newHeight = parseFloat(document.getElementById('editHeight').value);
+
+  if (!newName || isNaN(newHeight)) { toast('Invalid values', true); return; }
+
+  // Delete old key if renamed and not a core preset
+  const isCore = editingKey === 'sit' || editingKey === 'stand';
+  if (!isCore && newName !== editingKey) {
+    await fetch(`${API}/api/presets/${editingKey}`, { method: 'DELETE' });
+  }
+
+  // Save new
+  const body = {};
+  body[newName] = newHeight;
+  await fetch(`${API}/api/presets`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+
+  closeModal();
+  toast(`✓ Preset updated`);
+  poll();
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : ' ok');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Calibration ────────────────────────────────────────────────
+function logCalPoint(autoDirection) {
+  const actualEl = document.getElementById('calActual');
+  const actual = parseFloat(actualEl.value);
+  const sensor = state.height;
+  if (isNaN(actual) || sensor === null) { toast('Enter actual height', true); return; }
+  const diff = actual - sensor;
+  const dir = autoDirection || lastDirection;
+  calLog.push({ actual, sensor, diff: diff.toFixed(1), dir });
+  renderCalLog();
+  console.log(`CAL | actual=${actual} sensor=${sensor} diff=${diff.toFixed(1)} dir=${dir}`);
+}
+
+function renderCalLog() {
+  const tbody = document.getElementById('calBody');
+  tbody.innerHTML = '';
+  calLog.forEach(row => {
+    const d = parseFloat(row.diff);
+    const cls = d > 0 ? 'pos' : d < 0 ? 'neg' : '';
+    tbody.innerHTML += `<tr>
+      <td>${row.actual} cm</td>
+      <td>${row.sensor} cm</td>
+      <td class="${cls}">${d > 0 ? '+' : ''}${row.diff} cm</td>
+      <td>${row.dir}</td>
+    </tr>`;
+  });
+}
+
+function clearCalLog() { calLog = []; renderCalLog(); }
+
+// Auto-log při zastavení po pohybu
+function checkAutoLog(newStatus) {
+  if (prevStatus !== 'idle' && newStatus === 'idle') {
+    const actualEl = document.getElementById('calActual');
+    if (actualEl.value) logCalPoint(lastDirection);
+    sendCommand('stop');
+  }
+  if (newStatus !== 'idle') lastDirection = newStatus;
+  prevStatus = newStatus;
+}
+
+// ── Init ───────────────────────────────────────────────────────
+poll();
+setInterval(poll, 300);
+</script>
+</body>
+</html>
