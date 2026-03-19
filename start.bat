@@ -39,13 +39,13 @@ timeout /t 1 /nobreak >nul
 
 REM --- Flask web interface ---
 echo [3/3] DeskControl web interface...
-start "DeskControl Web" cmd /k "cd /d "%~dp0" && python app.py && pause"
-echo       OK - http://localhost:5000
+start "DeskControl Web" cmd /k "cd /d "%~dp0" && python main.py && pause"
+echo       OK - http://localhost:5001
 
 echo.
 echo ==========================================
 echo   Vse spusteno
-echo   Web: http://localhost:5000
+echo   Web: http://localhost:5001
 echo   ESPHome: http://localhost:6052
 echo ==========================================
 echo.
