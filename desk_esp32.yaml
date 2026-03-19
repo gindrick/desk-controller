@@ -56,7 +56,7 @@ globals:
     initial_value: '8.0'
   - id: max_height
     type: float
-    initial_value: '117.0'
+    initial_value: '116.5'
 
 sensor:
   - platform: ultrasonic
@@ -64,11 +64,11 @@ sensor:
     echo_pin: GPIO19
     name: "Desk Height Raw"
     id: desk_height
-    update_interval: 300ms
+    update_interval: 100ms
     filters:
-      - lambda: if (x < 0.60f) return {}; return x;
+      - lambda: if (x < 0.60f || x > 1.25f) return {}; return x;
       - median:
-          window_size: 5
+          window_size: 3
           send_every: 1
       - lambda: return (x * 100.0f + id(sensor_offset));
       - clamp:

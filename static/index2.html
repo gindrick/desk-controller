@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskControl v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0e0e0f; --surface:#161618; --border:#2a2a2e;
+    --accent:#e8ff47; --accent2:#47c8ff; --danger:#ff4757;
+    --warn:#ffaa00; --text:#f0f0f0; --muted:#555;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    padding:10px 12px 16px;gap:8px;}
+
+  header{width:100%;max-width:700px;display:flex;justify-content:space-between;align-items:center;}
+  h1{font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--accent);}
+  h1 span{font-size:.55rem;color:var(--muted);vertical-align:middle;margin-left:6px;}
+  .dot-row{display:flex;align-items:center;gap:6px;font-size:.6rem;color:var(--muted);}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .3s;}
+  .dot.ok{background:var(--accent);box-shadow:0 0 5px var(--accent);}
+  .dot.err{background:var(--danger);}
+
+  .card{width:100%;max-width:700px;background:var(--surface);
+    border:1px solid var(--border);border-radius:4px;padding:16px 18px;}
+
+  /* ── height ── */
+  .height-row{display:flex;align-items:flex-end;gap:12px;}
+  .big-num{font-family:'Syne',sans-serif;font-size:5rem;font-weight:800;
+    color:var(--accent);letter-spacing:-.04em;line-height:1;}
+  .big-unit{font-size:1rem;color:var(--muted);margin-bottom:.6rem;}
+  .height-meta{display:flex;flex-direction:column;gap:4px;margin-left:auto;text-align:right;}
+  .source-badge{font-size:.5rem;padding:2px 7px;border-radius:2px;letter-spacing:.08em;
+    background:var(--border);color:var(--muted);align-self:flex-end;}
+  .source-badge.sensor{background:#1a2a1a;color:#7fff7f;}
+  .source-badge.dr{background:#2a2210;color:var(--warn);}
+  .sensor-line{font-size:.62rem;color:var(--muted);}
+  .sensor-line span{color:var(--text);}
+
+  .cmp-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .cmp-cell{display:flex;flex-direction:column;gap:2px;}
+  .cmp-label{font-size:.48rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;}
+  .cmp-val{font-size:1rem;font-weight:700;font-family:'Syne',sans-serif;}
+  .cmp-val.v-sensor{color:#7fff7f;}
+  .cmp-val.v-dr{color:var(--warn);}
+  .cmp-val.v-diff{color:var(--muted);}
+  .cmp-val.v-diff.big{color:var(--danger);}
+  .status-bar{display:flex;gap:6px;margin-top:8px;align-items:center;font-size:.58rem;color:var(--muted);}
+  .status-pill{padding:2px 8px;border-radius:2px;background:var(--border);letter-spacing:.06em;}
+  .status-pill.moving-up{background:#1a2610;color:var(--accent);}
+  .status-pill.moving-down{background:#101f2a;color:var(--accent2);}
+
+  /* ── buttons ── */
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--text);
+    font-family:'Space Mono',monospace;font-size:.82rem;padding:14px 10px;border-radius:3px;
+    cursor:pointer;letter-spacing:.05em;transition:background .15s,border-color .15s;
+    width:100%;}
+  .btn:hover{background:#222;border-color:#444;}
+  .btn:active{transform:scale(.98);}
+  .btn.up{border-color:#3a4a20;color:var(--accent);}
+  .btn.up:hover{background:#1a2610;}
+  .btn.down{border-color:#1a3040;color:var(--accent2);}
+  .btn.down:hover{background:#0e1f2e;}
+  .btn.stop{border-color:#5a1020;color:var(--danger);background:#1a0810;}
+  .btn.stop:hover{background:#2a0e18;}
+
+  .move-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .stop-row{margin-bottom:14px;}
+
+  /* ── presets ── */
+  .section-divider{border:none;border-top:1px solid var(--border);margin:14px 0;}
+
+  /* [NAME 90px] [VALUE 80px] [GO flex] [✎ 36px] [✕ 36px] */
+  .preset-row{display:grid;grid-template-columns:90px 80px 1fr 36px 36px;
+    gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+  .preset-row.is-default{grid-template-columns:90px 80px 1fr;}
+  .preset-row:last-of-type{border-bottom:none;}
+  .preset-row.editing{grid-template-columns:1fr auto auto auto;}
+
+  .preset-name{font-size:.82rem;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .preset-name.custom{color:var(--accent2);}
+  .preset-name.def{color:var(--accent);}
+
+  .preset-val{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;
+    color:var(--text);letter-spacing:-.02em;white-space:nowrap;}
+  .preset-val span{font-size:.58rem;font-family:'Space Mono',monospace;
+    color:var(--muted);font-weight:400;margin-left:2px;}
+
+  /* edit fields */
+  .preset-edit-fields{display:flex;gap:6px;align-items:center;min-width:0;}
+  .edit-name-input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--accent2);
+    color:var(--accent2);font-family:'Space Mono',monospace;font-size:.78rem;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;padding:7px 9px;border-radius:3px;}
+  .edit-name-input:focus{outline:none;}
+  .edit-h-input{width:78px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);
+    color:var(--text);font-family:'Space Mono',monospace;font-size:.85rem;font-weight:700;
+    padding:7px 9px;border-radius:3px;}
+  .edit-h-input:focus{outline:none;border-color:var(--accent);}
+
+  .btn-go{border:1px solid #3a4a20;background:#1a2610;color:var(--accent);
+    font-family:'Space Mono',monospace;font-size:.78rem;padding:11px 0;
+    border-radius:3px;cursor:pointer;letter-spacing:.05em;width:100%;
+    transition:background .15s,border-color .15s;}
+  .btn-go:hover{background:#223310;border-color:#4a6428;}
+  .btn-go:active{transform:scale(.98);}
+
+  .btn-icon{border:1px solid var(--border);background:none;color:var(--muted);
+    font-size:.8rem;width:36px;height:36px;border-radius:3px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .15s,color .15s;}
+  .btn-icon:hover{background:#222;color:var(--text);}
+  .btn-icon.save{border-color:#3a4a20;color:var(--accent);}
+  .btn-icon.save:hover{background:#1a2610;}
+  .btn-icon.cancel{border-color:#3a1020;color:var(--danger);}
+  .btn-icon.cancel:hover{background:#1a0810;}
+
+  .btn-del{border:1px solid #3a1020;background:none;color:#ff4757;
+    font-family:'Space Mono',monospace;font-size:.7rem;padding:10px 12px;
+    border-radius:3px;cursor:pointer;flex-shrink:0;transition:background .15s;}
+  .btn-del:hover{background:#1a0810;}
+
+  /* add preset row */
+  .add-row{display:flex;gap:8px;align-items:center;margin-top:12px;}
+  .add-row input[type=text]{flex:1;background:var(--bg);border:1px solid var(--border);
+    color:var(--text);font-family:'Space Mono',monospace;font-size:.75rem;
+    padding:9px 10px;border-radius:3px;min-width:0;}
+  .add-row input[type=text]::placeholder{color:var(--muted);}
+  .add-row input[type=text]:focus{outline:none;border-color:var(--border);}
+  .btn-save{border:1px solid #2a3a18;background:#141f0a;color:var(--accent);
+    font-family:'Space Mono',monospace;font-size:.68rem;padding:9px 14px;
+    border-radius:3px;cursor:pointer;white-space:nowrap;flex-shrink:0;
+    transition:background .15s;}
+  .btn-save:hover{background:#1e2f10;}
+
+  /* goto row — matches preset grid: [label 90px] [input 80px] [GO 1fr] */
+  .goto-row{display:grid;grid-template-columns:90px 80px 1fr;
+    gap:8px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+  .goto-label{font-size:.82rem;color:var(--muted);letter-spacing:.05em;font-weight:700;
+    text-transform:uppercase;}
+  .goto-input{background:var(--bg);border:1px solid var(--border);color:var(--text);
+    font-family:'Space Mono',monospace;font-size:.9rem;font-weight:700;
+    padding:8px 10px;border-radius:3px;width:100%;}
+  .goto-input:focus{outline:none;border-color:var(--accent);}
+
+  /* ── set height manually — same grid as goto/presets ── */
+  .manual-row{display:grid;grid-template-columns:90px 80px 1fr;
+    gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .manual-label{font-size:.82rem;color:var(--muted);letter-spacing:.05em;font-weight:700;
+    text-transform:uppercase;}
+  .manual-input{background:var(--bg);border:1px solid var(--border);color:var(--text);
+    font-family:'Space Mono',monospace;font-size:.9rem;font-weight:700;
+    padding:8px 10px;border-radius:3px;width:100%;}
+  .manual-input:focus{outline:none;border-color:var(--border);}
+  .btn-set{border:1px solid var(--border);background:var(--surface);color:var(--muted);
+    font-family:'Space Mono',monospace;font-size:.78rem;padding:11px 0;
+    border-radius:3px;cursor:pointer;width:100%;transition:background .15s;}
+  .btn-set:hover{background:#222;color:var(--text);}
+
+  /* ── collapsible sections ── */
+  .collapse-toggle{width:100%;max-width:700px;display:flex;justify-content:space-between;
+    align-items:center;background:none;border:1px solid var(--border);border-radius:3px;
+    padding:8px 14px;cursor:pointer;color:var(--muted);font-family:'Space Mono',monospace;
+    font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;transition:border-color .15s;}
+  .collapse-toggle:hover{border-color:#444;color:var(--text);}
+  .collapse-arrow{transition:transform .2s;}
+  .collapse-arrow.open{transform:rotate(180deg);}
+
+  .collapse-body{width:100%;max-width:700px;display:none;}
+  .collapse-body.open{display:block;}
+
+  /* model table */
+  table{width:100%;border-collapse:collapse;font-size:.68rem;}
+  th{color:var(--muted);font-weight:400;text-align:left;padding:4px 6px 8px 0;letter-spacing:.08em;}
+  td{padding:5px 6px 5px 0;border-top:1px solid var(--border);}
+  td.val{color:var(--accent);font-weight:700;}
+  td.val2{color:var(--accent2);font-weight:700;}
+
+  svg.profile-graph{display:block;width:100%;}
+  .graph-label{font-size:.5rem;fill:var(--muted);font-family:'Space Mono',monospace;}
+  .graph-axis{stroke:#2a2a2e;stroke-width:1;}
+  .graph-grid{stroke:#1e1e20;stroke-width:1;stroke-dasharray:3,3;}
+  .vel-line-up{stroke:#e8ff47;stroke-width:1.5;fill:none;}
+  .vel-line-down{stroke:#47c8ff;stroke-width:1.5;fill:none;}
+  .plateau-line{stroke:#555;stroke-width:1;stroke-dasharray:4,3;}
+  .accel-line{stroke:#e8ff4744;stroke-width:1;}
+  .decel-line{stroke:#47c8ff44;stroke-width:1;}
+
+  /* profile history */
+  .hist-row{display:flex;align-items:center;gap:8px;padding:5px 0;
+    border-bottom:1px solid var(--border);font-size:.62rem;}
+  .hist-row:last-child{border-bottom:none;}
+  .hist-dir{width:13px;height:13px;border-radius:2px;flex-shrink:0;}
+  .hist-dir.up{background:#1a2610;border:1px solid #3a4a20;}
+  .hist-dir.down{background:#101f2a;border:1px solid #1a3040;}
+  .hist-info{flex:1;color:var(--muted);}
+  .hist-info b{color:var(--text);}
+  .clear-all{font-size:.58rem;color:var(--danger);background:none;border:none;
+    cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:.06em;}
+  .clear-all:hover{text-decoration:underline;}
+  .btn-sm-del{border:1px solid #3a1020;background:none;color:#ff4757;
+    font-family:'Space Mono',monospace;font-size:.58rem;padding:3px 8px;
+    border-radius:3px;cursor:pointer;}
+  .btn-sm-del:hover{background:#1a0810;}
+
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    background:#222;border:1px solid var(--border);color:var(--text);
+    padding:7px 18px;border-radius:3px;font-size:.72rem;pointer-events:none;
+    opacity:0;transition:opacity .2s;z-index:999;}
+  .toast.show{opacity:1;}
+
+  @media(max-width:480px){
+    .big-num{font-size:3.8rem;}
+    body{padding:8px 8px 12px;}
+    .card{padding:14px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DESKCONTROL <span>v3</span></h1>
+  <div class="dot-row">
+    <div class="dot" id="mqttDot"></div>
+    <span id="mqttLabel">MQTT</span>
+  </div>
+</header>
+
+<!-- Height -->
+<div class="card">
+  <div class="height-row">
+    <div>
+      <div class="big-num" id="heightNum">--</div>
+      <span class="big-unit">cm</span>
+    </div>
+    <div class="height-meta">
+      <div class="source-badge" id="sourceBadge">--</div>
+      <div class="sensor-line">SENSOR <span id="sensorVal">--</span> cm</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-pill" id="statusPill">IDLE</div>
+  </div>
+  <div class="cmp-row">
+    <div class="cmp-cell">
+      <div class="cmp-label">Sensor</div>
+      <div class="cmp-val v-sensor" id="cmpSensor">--</div>
+    </div>
+    <div class="cmp-cell">
+      <div class="cmp-label">Dead reck.</div>
+      <div class="cmp-val v-dr" id="cmpDr">--</div>
+    </div>
+    <div class="cmp-cell">
+      <div class="cmp-label">Diff S−DR</div>
+      <div class="cmp-val v-diff" id="cmpDiff">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- Controls + Presets -->
+<div class="card">
+  <div class="move-row">
+    <button class="btn up"
+      onmousedown="startMove('up')"   onmouseup="stopMove()"
+      ontouchstart="startMove('up')"  ontouchend="stopMove()">▲ UP</button>
+    <button class="btn down"
+      onmousedown="startMove('down')" onmouseup="stopMove()"
+      ontouchstart="startMove('down')" ontouchend="stopMove()">▼ DOWN</button>
+  </div>
+  <div class="stop-row">
+    <button class="btn stop" onclick="cmd('stop')">■ STOP</button>
+  </div>
+
+  <hr class="section-divider">
+
+  <div id="presetList"></div>
+
+  <div class="add-row">
+    <input type="text" id="newPresetName" placeholder="new preset name…">
+    <button class="btn-save" onclick="saveCurrentAsPreset()">Save current height</button>
+  </div>
+
+  <div class="goto-row">
+    <span class="goto-label">GOTO</span>
+    <input type="number" class="goto-input" id="gotoInput"
+      min="70" max="116.5" step="0.5" placeholder="cm"
+      onkeydown="if(event.key==='Enter')doGoto()">
+    <button class="btn-go" onclick="doGoto()">→ GO</button>
+  </div>
+
+  <div class="manual-row">
+    <span class="manual-label">SET HEIGHT</span>
+    <input type="number" class="manual-input" id="manualHeight"
+      min="70" max="116.5" step="0.1" placeholder="cm">
+    <button class="btn-set" onclick="setManual()">Set</button>
+  </div>
+</div>
+
+<!-- Motion model (collapsible) -->
+<button class="collapse-toggle" onclick="toggleSection('modelSection',this)">
+  <span>Motion model</span>
+  <span class="collapse-arrow" id="modelArrow">▼</span>
+</button>
+<div class="collapse-body" id="modelSection">
+  <div class="card" style="border-top:none;border-radius:0 0 4px 4px;">
+    <table>
+      <thead><tr><th>Direction</th><th>Speed cm/s</th><th>Accel s</th><th>Decel s</th><th>n</th></tr></thead>
+      <tbody id="modelBody">
+        <tr><td colspan="5" style="color:var(--muted);font-size:.65rem;">No data</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:.5rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;">Last profile</span>
+        <span id="profileMeta" style="color:var(--muted);font-size:.5rem;"></span>
+      </div>
+      <svg class="profile-graph" id="profileSvg" viewBox="0 0 560 110" preserveAspectRatio="none" style="height:110px;">
+        <text x="280" y="60" text-anchor="middle" class="graph-label" fill="#444">No profile yet — move the desk</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- Profile history (collapsible) -->
+<button class="collapse-toggle" onclick="toggleSection('histSection',this)">
+  <span>Profile history</span>
+  <span class="collapse-arrow" id="histArrow">▼</span>
+</button>
+<div class="collapse-body" id="histSection">
+  <div class="card" style="border-top:none;border-radius:0 0 4px 4px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:.55rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;">History</span>
+      <button class="clear-all" onclick="clearProfiles()">✕ Clear all</button>
+    </div>
+    <div id="histList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── toast ──────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, err=false) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.style.borderColor = err ? 'var(--danger)' : 'var(--border)';
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── collapsible sections ───────────────────────────────────────────
+function toggleSection(id, btn) {
+  const body  = $(id);
+  const arrow = btn.querySelector('.collapse-arrow');
+  const open  = body.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+}
+
+// ── smooth display via requestAnimationFrame ───────────────────────
+const raf = {
+  isMoving: false, dir: null, startH: null, startT: null, speed: 2.7, accelT: 0.5
+};
+
+function rafComputeH() {
+  const elapsed = (performance.now() - raf.startT) / 1000;
+  let delta;
+  if (raf.accelT > 0 && elapsed <= raf.accelT) {
+    delta = 0.5 * raf.speed * elapsed * elapsed / raf.accelT;
+  } else {
+    delta = 0.5 * raf.speed * raf.accelT + (elapsed - raf.accelT) * raf.speed;
+  }
+  const h = raf.dir === 'up' ? raf.startH + delta : raf.startH - delta;
+  return Math.round(Math.max(70, Math.min(116.5, h)) * 10) / 10;
+}
+
+(function rafLoop() {
+  if (raf.isMoving && raf.startH !== null) $('heightNum').textContent = rafComputeH().toFixed(1);
+  requestAnimationFrame(rafLoop);
+})();
+
+// ── state ──────────────────────────────────────────────────────────
+let lastPresetsJson = '', lastModelJson = '', lastHistJson = '';
+
+// ── command ────────────────────────────────────────────────────────
+async function cmd(command) {
+  try {
+    const r = await fetch('/api/command', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({command})
+    });
+    if (!r.ok) { const d = await r.json(); toast(d.error||'Error', true); }
+  } catch(e) { toast('Network error', true); }
+}
+
+let _moveStart = 0, _stopTimer = null;
+function startMove(dir) { clearTimeout(_stopTimer); _moveStart = Date.now(); cmd(dir); }
+function stopMove() {
+  const delay = Math.max(0, 400 - (Date.now() - _moveStart));
+  _stopTimer = setTimeout(() => cmd('stop'), delay);
+}
+
+// ── goto ───────────────────────────────────────────────────────────
+async function gotoHeight(h) {
+  try {
+    const r = await fetch('/api/goto', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({height: h})
+    });
+    const d = await r.json();
+    if (!r.ok) toast(d.error||'Error', true);
+    else toast(`GOTO ${h} cm`);
+  } catch(e) { toast('Network error', true); }
+}
+
+function doGoto() {
+  const h = parseFloat($('gotoInput').value);
+  if (isNaN(h) || h < 70 || h > 116.5) { toast('Invalid height (70–116.5 cm)', true); return; }
+  gotoHeight(h);
+}
+
+// ── presets ────────────────────────────────────────────────────────
+function renderPresets(presets) {
+  const json = JSON.stringify(presets);
+  if (json === lastPresetsJson) return;
+  lastPresetsJson = json;
+
+  const list = $('presetList');
+  const order = ['min','max',...Object.keys(presets).filter(k=>k!=='min'&&k!=='max').sort()];
+  list.innerHTML = order.filter(k => k in presets).map(name => {
+    const h     = presets[name];
+    const isDef = name === 'min' || name === 'max';
+    const esc   = name.replace(/'/g,"\\'");
+    return `
+    <div class="preset-row ${isDef?'is-default':''}">
+      <div class="preset-name ${isDef?'def':'custom'}">${name.toUpperCase()}</div>
+      <div class="preset-val">${h.toFixed(1)}<span>cm</span></div>
+      <button class="btn-go" onclick="gotoHeight(${h})">→ GO</button>
+      ${isDef ? '' : `
+        <button class="btn-icon" title="Edit" onclick="startEditPreset('${esc}',${h})">✎</button>
+        <button class="btn-icon cancel" title="Delete" onclick="deletePreset('${esc}')">✕</button>
+      `}
+    </div>`;
+  }).join('');
+}
+
+async function deletePreset(name) {
+  await fetch(`/api/presets/${encodeURIComponent(name)}`, {method:'DELETE'});
+  lastPresetsJson = '';
+}
+
+function startEditPreset(name, h) {
+  // Find the row by scanning preset-name text content
+  const rows = document.querySelectorAll('#presetList .preset-row');
+  let row;
+  for (const r of rows) {
+    const nm = r.querySelector('.preset-name');
+    if (nm && nm.textContent.trim() === name.toUpperCase()) { row = r; break; }
+  }
+  if (!row) return;
+  row.className = 'preset-row editing';
+  row.innerHTML = `
+    <div class="preset-edit-fields">
+      <input type="text" class="edit-name-input" id="ename" value="${name}"
+        onkeydown="if(event.key==='Enter')$('esave').click()">
+      <input type="number" class="edit-h-input" id="eheight" min="70" max="116.5" step="0.1"
+        value="${h}" onkeydown="if(event.key==='Enter')$('esave').click()">
+      <span style="font-size:.62rem;color:var(--muted);flex-shrink:0">cm</span>
+    </div>
+    <button class="btn-icon save" id="esave" onclick="savePresetEdit('${name}')">✓</button>
+    <button class="btn-icon cancel" onclick="cancelPresetEdit()">✗</button>
+  `;
+  $('ename').focus();
+  $('ename').select();
+}
+
+async function savePresetEdit(oldName) {
+  const newName = $('ename').value.trim();
+  const h       = parseFloat($('eheight').value);
+  if (!newName || isNaN(h) || h < 70 || h > 116.5) { toast('Invalid values', true); return; }
+  if (newName !== oldName) {
+    await fetch(`/api/presets/${encodeURIComponent(oldName)}`, {method:'DELETE'});
+  }
+  await fetch('/api/presets', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({[newName]: h})});
+  lastPresetsJson = '';
+  if (newName !== oldName) toast(`"${oldName}" → "${newName}"`);
+}
+
+function cancelPresetEdit() {
+  lastPresetsJson = '';  // force re-render on next poll
+}
+
+async function saveCurrentAsPreset() {
+  const name = $('newPresetName').value.trim();
+  if (!name) { toast('Enter a preset name', true); return; }
+  const r = await fetch('/api/presets/save_current', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+  const d = await r.json();
+  if (d.ok) { toast(`Saved "${name}" at ${d.height} cm`); $('newPresetName').value=''; lastPresetsJson=''; }
+  else toast(d.error, true);
+}
+
+// ── manual height ──────────────────────────────────────────────────
+async function setManual() {
+  const h = parseFloat($('manualHeight').value);
+  if (isNaN(h) || h < 70 || h > 116.5) { toast('Invalid height (70–116.5 cm)', true); return; }
+  const r = await fetch('/api/set_height', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({height: h})});
+  const d = await r.json();
+  if (d.ok) toast(`Height set to ${d.height} cm`);
+  else toast(d.error, true);
+}
+
+// ── velocity profile graph ─────────────────────────────────────────
+function drawProfile(p) {
+  if (!p || !p.velocities || p.velocities.length < 2) return;
+  const svg = $('profileSvg');
+  const isUp = p.direction === 'up';
+  const W=560, H=110, PAD={l:34,r:8,t:8,b:24};
+  const gW=W-PAD.l-PAD.r, gH=H-PAD.t-PAD.b;
+  const ts=p.velocities.map(v=>v[0]), vs=p.velocities.map(v=>v[1]);
+  const tMax=Math.max(...ts,0.1), vMax=Math.max(...vs,0.5)*1.15;
+  const sx=t=>PAD.l+(t/tMax)*gW, sy=v=>PAD.t+gH-(v/vMax)*gH;
+  let html='';
+  for(let i=0;i<=4;i++){
+    const y=PAD.t+(gH/4)*i, v=vMax-(vMax/4)*i;
+    html+=`<line class="graph-grid" x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}"/>`;
+    html+=`<text class="graph-label" x="${PAD.l-3}" y="${y+3}" text-anchor="end">${v.toFixed(1)}</text>`;
+  }
+  for(let i=0;i<=4;i++){
+    const x=PAD.l+(gW/4)*i, t=(tMax/4)*i;
+    html+=`<text class="graph-label" x="${x}" y="${H-5}" text-anchor="middle">${t.toFixed(1)}s</text>`;
+  }
+  html+=`<line class="graph-axis" x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+gH}"/>`;
+  html+=`<line class="graph-axis" x1="${PAD.l}" y1="${PAD.t+gH}" x2="${W-PAD.r}" y2="${PAD.t+gH}"/>`;
+  if(p.speed){const yp=sy(p.speed);
+    html+=`<line class="plateau-line" x1="${PAD.l}" y1="${yp}" x2="${W-PAD.r}" y2="${yp}"/>`;
+    html+=`<text class="graph-label" x="${W-PAD.r-2}" y="${yp-3}" text-anchor="end" fill="#888">${p.speed} cm/s</text>`;
+  }
+  if(p.accel_time){const xa=sx(p.accel_time);html+=`<line class="accel-line" x1="${xa}" y1="${PAD.t}" x2="${xa}" y2="${PAD.t+gH}"/>`;}
+  if(p.decel_time&&p.duration){const xd=sx(p.duration-p.decel_time);html+=`<line class="decel-line" x1="${xd}" y1="${PAD.t}" x2="${xd}" y2="${PAD.t+gH}"/>`;}
+  const pts=p.velocities.map(([t,v])=>`${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
+  html+=`<polyline class="${isUp?'vel-line-up':'vel-line-down'}" points="${pts}"/>`;
+  svg.innerHTML=html;
+  $('profileMeta').textContent=`${p.direction.toUpperCase()} ${(p.start_h||0).toFixed(1)}→${(p.end_h||0).toFixed(1)}cm  ${(p.duration||0).toFixed(2)}s`;
+}
+
+// ── model table ────────────────────────────────────────────────────
+function renderModel(model) {
+  const json = JSON.stringify(model);
+  if (json === lastModelJson) return;
+  lastModelJson = json;
+  const rows = ['up','down'].map(dir => {
+    const m = model[dir];
+    return m
+      ? `<tr><td style="color:${dir==='up'?'var(--accent)':'var(--accent2)'}">▲ ${dir.toUpperCase()}</td>
+          <td class="${dir==='up'?'val':'val2'}">${m.speed}</td>
+          <td>${m.accel_time}</td><td>${m.decel_time}</td>
+          <td style="color:var(--muted)">${m.count}</td></tr>`
+      : `<tr><td style="color:${dir==='up'?'var(--accent)':'var(--accent2)'}">▲ ${dir.toUpperCase()}</td>
+          <td colspan="4" style="color:var(--muted);font-size:.6rem;">no data</td></tr>`;
+  });
+  $('modelBody').innerHTML = rows.join('');
+}
+
+// ── profile history ────────────────────────────────────────────────
+function renderHistory(profiles) {
+  const json = JSON.stringify(profiles.map(p=>p.id));
+  if (json === lastHistJson) return;
+  lastHistJson = json;
+  const list = $('histList');
+  if (!profiles.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.62rem;padding:4px 0">No profiles yet</div>';
+    return;
+  }
+  list.innerHTML = profiles.map(p=>`
+    <div class="hist-row">
+      <div class="hist-dir ${p.direction}"></div>
+      <div class="hist-info">
+        <b>${p.direction.toUpperCase()}</b>
+        ${p.start_h!=null?p.start_h.toFixed(1):'?'}→${p.end_h!=null?p.end_h.toFixed(1):'?'} cm
+        &nbsp;·&nbsp; ${p.speed!=null?p.speed.toFixed(3)+' cm/s':'?'}
+        &nbsp;·&nbsp; ${p.duration!=null?p.duration.toFixed(2)+'s':'?'}
+        &nbsp;·&nbsp; ${p.sample_count} pts
+      </div>
+      <button class="btn-sm-del" onclick="deleteProfile(${p.id})">✕</button>
+    </div>`).join('');
+}
+
+async function deleteProfile(id) {
+  await fetch(`/api/profiles/${id}`, {method:'DELETE'});
+  lastHistJson = ''; fetchProfiles();
+}
+async function clearProfiles() {
+  await fetch('/api/profiles', {method:'DELETE'});
+  lastHistJson = ''; lastModelJson = ''; fetchProfiles();
+}
+
+// ── poll state ─────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const d = await fetch('/api/state').then(r=>r.json());
+
+    $('mqttDot').className = 'dot ' + (d.mqtt_connected ? 'ok' : 'err');
+    $('mqttLabel').textContent = d.mqtt_connected ? 'MQTT OK' : 'MQTT ERROR';
+    $('sensorVal').textContent = d.sensor_height != null ? d.sensor_height.toFixed(1) : '--';
+
+    const isMoving = d.status === 'moving_up' || d.status === 'moving_down';
+    const dir = d.status === 'moving_up' ? 'up' : 'down';
+    if (isMoving) {
+      const m = d.model && d.model[dir];
+      if (m) { raf.speed = m.speed; raf.accelT = m.accel_time || 0.3; }
+      raf.dir = dir;
+      if (d.sensor_fresh && d.sensor_height != null) {
+        raf.startH = d.sensor_height; raf.startT = performance.now();
+      } else if (!raf.isMoving) {
+        raf.startH = d.height ?? d.sensor_height ?? raf.startH; raf.startT = performance.now();
+      }
+      raf.isMoving = true;
+    } else {
+      raf.isMoving = false;
+      $('heightNum').textContent = d.height != null ? d.height.toFixed(1) : '--';
+    }
+
+    const badge = $('sourceBadge');
+    if (isMoving)         { badge.className='source-badge sensor'; badge.textContent='LIVE'; }
+    else if(d.sensor_fresh){ badge.className='source-badge sensor'; badge.textContent='SENSOR'; }
+    else                  { badge.className='source-badge dr';     badge.textContent='DEAD RECKONING'; }
+
+    const s=d.sensor_height, dr=d.dr_height;
+    $('cmpSensor').textContent = s  != null ? s.toFixed(1)  +' cm' : '--';
+    $('cmpDr').textContent     = dr != null ? dr.toFixed(1) +' cm' : '--';
+    if (s != null && dr != null) {
+      const diff=s-dr, el=$('cmpDiff');
+      el.textContent = (diff>=0?'+':'')+diff.toFixed(1)+' cm';
+      el.className   = 'cmp-val v-diff'+(Math.abs(diff)>3?' big':'');
+    } else { $('cmpDiff').textContent='--'; }
+
+    const pill=$('statusPill');
+    pill.textContent = d.status.replace('_',' ').toUpperCase();
+    pill.className   = 'status-pill '+d.status.replace('_','-');
+
+    if (d.presets) renderPresets(d.presets);
+    if (d.model)   renderModel(d.model);
+  } catch(e) {}
+}
+
+async function fetchProfiles() {
+  try {
+    const d = await fetch('/api/profiles').then(r=>r.json());
+    if (d.last_profile) drawProfile(d.last_profile);
+    if (d.profiles)     renderHistory(d.profiles);
+    if (d.model)        renderModel(d.model);
+  } catch(e) {}
+}
+
+setInterval(poll, 300);
+setInterval(fetchProfiles, 1500);
+poll(); fetchProfiles();
+</script>
+</body>
+</html>
