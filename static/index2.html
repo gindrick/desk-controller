@@ -663,9 +663,20 @@ async function fetchProfiles() {
   } catch(e) {}
 }
 
-setInterval(poll, 300);
-setInterval(fetchProfiles, 1500);
-poll(); fetchProfiles();
+let _pollTimer = null;
+let _postMoveUntil = 0;
+function schedulePoll() {
+  clearTimeout(_pollTimer);
+  const fast = raf.isMoving || Date.now() < _postMoveUntil;
+  _pollTimer = setTimeout(async () => {
+    const wasMov = raf.isMoving;
+    await poll();
+    if (wasMov && !raf.isMoving) _postMoveUntil = Date.now() + 5000;
+    schedulePoll();
+  }, fast ? 200 : 2000);
+}
+setInterval(fetchProfiles, 3000);
+poll().then(schedulePoll); fetchProfiles();
 </script>
 </body>
 </html>
