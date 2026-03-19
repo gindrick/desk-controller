@@ -690,5 +690,5 @@ def index():
 
 if __name__ == "__main__":
     init_db()
-    print("DeskControl v3  →  http://localhost:5001")
+    print("DeskControl v3  ->  http://localhost:5001")
     app.run(host="0.0.0.0", port=5001, debug=False)
